@@ -125,7 +125,7 @@ impl<U: Universe> HttpClient<U>
 }
 
 /// Application service showcasing how the universe cascades from app-level
-/// types down into library types — no `where State: U::Bounds` needed here.
+/// types down into library types.
 pub struct AppService<U: Universe>
 {
     client: HttpClient<U>,
