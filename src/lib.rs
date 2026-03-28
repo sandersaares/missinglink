@@ -52,15 +52,21 @@ impl<T> CellLike<T> for RefCell<T> {
 
 /// A "universe" determines the threading model for all generic infrastructure.
 ///
-/// * **`trait Bounds`** is an *associated trait* — the new language feature.
-///   It lets each universe declare what constraints inner values must satisfy.
-/// * **`Ref`** and **`Cell`** are GATs bounded by `Self::Bounds`, so the
-///   compiler enforces that `Arc`/`Mutex` only appear in the `Send + Sync`
-///   universe and `Rc`/`RefCell` only in the isolated one.
+/// Two *associated traits* (the new language feature) separate input
+/// requirements from output guarantees:
+///
+/// * **`BoundsIn`** — what inner values must satisfy to enter the universe.
+///   For `Shared` this is `Send + 'static` (not `Sync` — `Mutex` provides that).
+/// * **`BoundsOut`** — what the universe's wrapper types guarantee.
+///   For `Shared` this is `Send + Sync + 'static`.
+///
+/// `Cell` bridges the two: it accepts `BoundsIn` and its output satisfies
+/// `BoundsOut`. This models how `Mutex<T: Send>` is itself `Send + Sync`.
 pub trait Universe {
-    trait Bounds;
-    type Ref<T: Self::Bounds>: RefLike<T> + Self::Bounds;
-    type Cell<T: Self::Bounds>: CellLike<T> + Self::Bounds;
+    trait BoundsIn;
+    trait BoundsOut;
+    type Ref<T: Self::BoundsOut>: RefLike<T> + Self::BoundsOut;
+    type Cell<T: Self::BoundsIn>: CellLike<T> + Self::BoundsOut;
 }
 
 // ---------------------------------------------------------------------------
@@ -70,9 +76,10 @@ pub trait Universe {
 pub struct Shared;
 
 impl Universe for Shared {
-    trait Bounds = Send + Sync + 'static;
-    type Ref<T: Self::Bounds> = Arc<T>;
-    type Cell<T: Self::Bounds> = Mutex<T>;
+    trait BoundsIn = Send + 'static;
+    trait BoundsOut = Send + Sync + 'static;
+    type Ref<T: Self::BoundsOut> = Arc<T>;
+    type Cell<T: Self::BoundsIn> = Mutex<T>;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,9 +89,10 @@ impl Universe for Shared {
 pub struct Isolated;
 
 impl Universe for Isolated {
-    trait Bounds = 'static;
-    type Ref<T: Self::Bounds> = Rc<T>;
-    type Cell<T: Self::Bounds> = RefCell<T>;
+    trait BoundsIn = 'static;
+    trait BoundsOut = 'static;
+    type Ref<T: Self::BoundsOut> = Rc<T>;
+    type Cell<T: Self::BoundsIn> = RefCell<T>;
 }
 
 // ---------------------------------------------------------------------------
